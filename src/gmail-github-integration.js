@@ -141,7 +141,7 @@ class MusicDataIssueManager {
       const newEntry = this.generateMusicDataEntry(musicData, emailData);
       
       // 既存の本文に新しいエントリを追加
-      const updatedBody = existingIssue.data.body + '\n\n' + newEntry;
+      const updatedBody = existingIssue.data.body + '\n' + newEntry;
 
       // Issue を更新
       const updatedIssue = await this.octokit.rest.issues.update({
@@ -163,37 +163,34 @@ class MusicDataIssueManager {
    * 新しい楽曲データエントリを生成（Issue追加用）
    */
   generateMusicDataEntry(musicData, emailData) {
-    let entry = '';
+    let entry = '- [ ] ';
     
     // 申込番号の行を生成
     if (musicData.applicationNumber) {
       entry += `${musicData.applicationNumber}　`;
     }
     
-    // 楽曲情報を生成（GitHub Issue #5649の形式に合わせる）
+    // 楽曲情報を生成
     let musicInfo = '';
     if (musicData.title) {
       musicInfo += musicData.title;
     }
-    if (musicData.composer && musicData.title && !musicData.title.includes(musicData.composer)) {
-      musicInfo += `／${musicData.composer}`;
+    
+    // メール本文から詳細な楽曲情報を抽出（「はじめてのギロック」など）
+    const detailMatch = emailData.body.match(/曲目\d*[：:\s]*([^\n\r]+)\n([^\n\r\/]+)/);
+    if (detailMatch && detailMatch[2]) {
+      const detail = detailMatch[2].trim();
+      if (detail && !musicInfo.includes(detail)) {
+        musicInfo += detail;
+      }
     }
+    
+    // 出版社情報を追加
     if (musicData.publisher) {
       musicInfo += `／${musicData.publisher}`;
     }
     
     entry += musicInfo;
-    
-    // 特記事項があれば追加
-    if (emailData.subject.includes('AI曲目絞り込み検索不備')) {
-      entry += '　※AI検索不備';
-    }
-    if (emailData.body.includes('対応している楽譜') || emailData.body.includes('レコードが無い')) {
-      entry += '　※楽譜に対応している　レコードが無い';
-    }
-    
-    // 受信日時をコメントとして追加
-    entry += `　<!-- 受信: ${emailData.date}, Gmail ID: ${emailData.emailId} -->`;
     
     return entry;
   }
