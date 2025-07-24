@@ -1,5 +1,5 @@
-// Gmail to GitHub Issue 自動登録システム
-// Gmail API と GitHub API を使用して未処理楽曲データをIssueとして登録
+// Gmail to GitHub Issue 自動登録システム（Issue更新版）
+// Gmail API と GitHub API を使用して未処理楽曲データを既存Issueに追加
 
 const { Octokit } = require('@octokit/rest');
 const { google } = require('googleapis');
@@ -14,8 +14,8 @@ class MusicDataIssueManager {
     // Gmail API クライアント初期化
     this.gmail = google.gmail({ version: 'v1', auth: gmailCredentials });
     
-    this.owner = 'KoidoManami';
-    this.repo = 'music-data-management';
+    this.owner = 'ptna-office';
+    this.repo = 'tasks';
   }
 
   /**
@@ -124,92 +124,78 @@ class MusicDataIssueManager {
   }
 
   /**
-   * GitHub Issue として登録
+   * 既存の Issue に新しい楽曲データを追加
    */
-  async createIssueFromMusicData(emailData) {
+  async addMusicDataToIssue(emailData, issueNumber = 5649) {
     const { musicData, subject, date, body, emailId } = emailData;
     
-    // Issue のタイトルを生成
-    let issueTitle = `[未処理] ${musicData.title || '楽曲情報'}`;
-    if (musicData.applicationNumber) {
-      issueTitle += ` (申込番号: ${musicData.applicationNumber})`;
-    }
-
-    // Issue の本文を生成
-    const issueBody = this.generateIssueBody(musicData, emailData);
-    
-    // ラベルを設定
-    const labels = this.generateLabels(subject, musicData);
-
     try {
-      const issue = await this.octokit.rest.issues.create({
-        owner: this.owner,
-        repo: this.repo,
-        title: issueTitle,
-        body: issueBody,
-        labels: labels
+      // 既存の Issue を取得
+      const existingIssue = await this.octokit.rest.issues.get({
+        owner: 'ptna-office',
+        repo: 'tasks',
+        issue_number: issueNumber
       });
 
-      console.log(`Issue created: ${issue.data.html_url}`);
-      return issue.data;
+      // 新しい楽曲データエントリを生成
+      const newEntry = this.generateMusicDataEntry(musicData, emailData);
+      
+      // 既存の本文に新しいエントリを追加
+      const updatedBody = existingIssue.data.body + '\n\n' + newEntry;
+
+      // Issue を更新
+      const updatedIssue = await this.octokit.rest.issues.update({
+        owner: 'ptna-office',
+        repo: 'tasks',
+        issue_number: issueNumber,
+        body: updatedBody
+      });
+
+      console.log(`Issue updated: ${updatedIssue.data.html_url}`);
+      return updatedIssue.data;
     } catch (error) {
-      console.error('GitHub Issue creation error:', error);
+      console.error('GitHub Issue update error:', error);
       throw error;
     }
   }
 
   /**
-   * Issue 本文を生成
+   * 新しい楽曲データエントリを生成（Issue追加用）
    */
-  generateIssueBody(musicData, emailData) {
-    let issueBody = `## 楽曲データ未処理情報\n\n`;
+  generateMusicDataEntry(musicData, emailData) {
+    let entry = '';
     
-    // 基本情報
-    issueBody += `### 基本情報\n`;
+    // 申込番号の行を生成
     if (musicData.applicationNumber) {
-      issueBody += `- **申込番号**: ${musicData.applicationNumber}\n`;
+      entry += `${musicData.applicationNumber}　`;
     }
-    if (musicData.stepEntryNumber) {
-      issueBody += `- **step_entry番号**: ${musicData.stepEntryNumber}\n`;
+    
+    // 楽曲情報を生成（GitHub Issue #5649の形式に合わせる）
+    let musicInfo = '';
+    if (musicData.title) {
+      musicInfo += musicData.title;
     }
-    issueBody += `- **受信日時**: ${emailData.date}\n`;
-    issueBody += `- **Gmail ID**: ${emailData.emailId}\n\n`;
-
-    // 楽曲情報
-    if (Object.keys(musicData).length > 2) {
-      issueBody += `### 楽曲情報\n`;
-      if (musicData.title) {
-        issueBody += `- **曲目**: ${musicData.title}\n`;
-      }
-      if (musicData.composer) {
-        issueBody += `- **作曲者**: ${musicData.composer}\n`;
-      }
-      if (musicData.publisher) {
-        issueBody += `- **出版社**: ${musicData.publisher}\n`;
-      }
-      issueBody += `\n`;
+    if (musicData.composer && musicData.title && !musicData.title.includes(musicData.composer)) {
+      musicInfo += `／${musicData.composer}`;
     }
-
-    // 元のメール内容
-    issueBody += `### 元のメール内容\n`;
-    issueBody += `**件名**: ${emailData.subject}\n\n`;
-    issueBody += '```\n';
-    issueBody += emailData.body;
-    issueBody += '\n```\n\n';
-
-    // 処理チェックリスト
-    issueBody += `### 処理チェックリスト\n`;
-    issueBody += `- [ ] 楽曲情報の確認\n`;
-    issueBody += `- [ ] データベースとの照合\n`;
-    issueBody += `- [ ] 重複チェック\n`;
-    issueBody += `- [ ] 修正・登録完了\n`;
-    issueBody += `- [ ] メール返信\n\n`;
-
-    // 処理メモ
-    issueBody += `### 処理メモ\n`;
-    issueBody += `<!-- 処理時のメモや特記事項をここに記載 -->\n`;
-
-    return issueBody;
+    if (musicData.publisher) {
+      musicInfo += `／${musicData.publisher}`;
+    }
+    
+    entry += musicInfo;
+    
+    // 特記事項があれば追加
+    if (emailData.subject.includes('AI曲目絞り込み検索不備')) {
+      entry += '　※AI検索不備';
+    }
+    if (emailData.body.includes('対応している楽譜') || emailData.body.includes('レコードが無い')) {
+      entry += '　※楽譜に対応している　レコードが無い';
+    }
+    
+    // 受信日時をコメントとして追加
+    entry += `　<!-- 受信: ${emailData.date}, Gmail ID: ${emailData.emailId} -->`;
+    
+    return entry;
   }
 
   /**
@@ -235,35 +221,35 @@ class MusicDataIssueManager {
   }
 
   /**
-   * 既存の Issue を検索（重複チェック）
+   * 既存の Issue 内で重複チェック
    */
-  async findExistingIssue(applicationNumber, stepEntryNumber) {
+  async checkDuplicateInIssue(applicationNumber, stepEntryNumber, issueNumber = 5649) {
     try {
-      let searchQuery = `repo:${this.owner}/${this.repo} state:open`;
-      
-      if (applicationNumber) {
-        searchQuery += ` "${applicationNumber}"`;
-      }
-      if (stepEntryNumber) {
-        searchQuery += ` "${stepEntryNumber}"`;
-      }
-
-      const searchResult = await this.octokit.rest.search.issues({
-        q: searchQuery
+      const issue = await this.octokit.rest.issues.get({
+        owner: 'ptna-office',
+        repo: 'tasks',
+        issue_number: issueNumber
       });
 
-      return searchResult.data.items.find(issue => 
-        issue.title.includes(applicationNumber) || 
-        issue.body.includes(stepEntryNumber)
-      );
+      const issueBody = issue.data.body || '';
+      
+      // 申込番号またはstep_entry番号が既に存在するかチェック
+      if (applicationNumber && issueBody.includes(applicationNumber)) {
+        return true;
+      }
+      if (stepEntryNumber && issueBody.includes(stepEntryNumber)) {
+        return true;
+      }
+      
+      return false;
     } catch (error) {
-      console.error('Issue search error:', error);
-      return null;
+      console.error('Issue duplicate check error:', error);
+      return false;
     }
   }
 
   /**
-   * メイン処理：Gmail から取得してGitHub Issue を作成
+   * メイン処理：Gmail から取得してGitHub Issue を更新
    */
   async processUnprocessedMusicData() {
     console.log('未処理楽曲データの処理を開始します...');
@@ -274,33 +260,37 @@ class MusicDataIssueManager {
       console.log(`${emailData.length} 件のメールを取得しました`);
 
       const results = [];
+      const targetIssueNumber = 5649; // ptna-office/tasks の Issue #5649
 
       for (const email of emailData) {
         const { musicData } = email;
         
-        // 既存の Issue をチェック
-        const existingIssue = await this.findExistingIssue(
+        // 既存の Issue 内で重複をチェック
+        const isDuplicate = await this.checkDuplicateInIssue(
           musicData.applicationNumber, 
-          musicData.stepEntryNumber
+          musicData.stepEntryNumber,
+          targetIssueNumber
         );
 
-        if (existingIssue) {
-          console.log(`既存のIssueが見つかりました: ${existingIssue.html_url}`);
+        if (isDuplicate) {
+          console.log(`重複データをスキップしました: 申込番号 ${musicData.applicationNumber}`);
           results.push({
             email,
             action: 'skipped',
-            issue: existingIssue
+            reason: 'duplicate'
           });
           continue;
         }
 
-        // 新しい Issue を作成
-        const newIssue = await this.createIssueFromMusicData(email);
+        // 既存の Issue に新しいデータを追加
+        const updatedIssue = await this.addMusicDataToIssue(email, targetIssueNumber);
         results.push({
           email,
-          action: 'created',
-          issue: newIssue
+          action: 'added_to_issue',
+          issue: updatedIssue
         });
+
+        console.log(`Issue #${targetIssueNumber} に楽曲データを追加しました: ${musicData.title || musicData.applicationNumber}`);
 
         // API レート制限を考慮して少し待機
         await new Promise(resolve => setTimeout(resolve, 1000));
