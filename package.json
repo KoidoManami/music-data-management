@@ -9,6 +9,7 @@
     "test:unit": "jest",
     "test:issue": "node src/test-issue-update.js",
     "test:issue:update": "node src/test-issue-update.js --update",
+    "check:gmail": "node src/check-gmail-auth.js",
     "transfer:recent": "node src/transfer-recent-emails.js",
     "dev": "nodemon src/index.js"
   },
