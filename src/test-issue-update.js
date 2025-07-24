@@ -1,4 +1,4 @@
-// テスト用スクリプト - 実際のIssue更新をテスト
+// テスト用スクリプト - 実際のIssue更新をテスト（チェックボックス形式）
 const MusicDataIssueManager = require('./gmail-github-integration');
 
 // サンプルの楽曲データ（Image 2の内容をベース）
@@ -25,7 +25,7 @@ step_entry番号：681229
 };
 
 async function testIssueUpdate() {
-  console.log('=== Issue更新テスト開始 ===');
+  console.log('=== チェックボックス形式 Issue更新テスト開始 ===');
   
   try {
     // 環境変数チェック
@@ -37,8 +37,20 @@ async function testIssueUpdate() {
     // マネージャーインスタンス作成（Gmail認証は不要なのでnullで代用）
     const manager = new MusicDataIssueManager(process.env.GITHUB_TOKEN, null);
     
+    // データエントリ生成をテスト
+    console.log('チェックボックス形式のデータエントリ生成中...');
+    const entry = manager.generateMusicDataEntry(
+      sampleEmailData.musicData, 
+      sampleEmailData
+    );
+    
+    console.log('生成されたエントリ:');
+    console.log(entry);
+    console.log('\n期待する形式:');
+    console.log('- [ ] 798738　ギロック／インディアンの雨乞いダンスはじめてのギロック／全音楽譜出版社');
+    
     // 重複チェックをテスト
-    console.log('重複チェック中...');
+    console.log('\n重複チェック中...');
     const isDuplicate = await manager.checkDuplicateInIssue(
       sampleEmailData.musicData.applicationNumber,
       sampleEmailData.musicData.stepEntryNumber
@@ -51,24 +63,16 @@ async function testIssueUpdate() {
       return;
     }
     
-    // データエントリ生成をテスト
-    console.log('データエントリ生成中...');
-    const entry = manager.generateMusicDataEntry(
-      sampleEmailData.musicData, 
-      sampleEmailData
-    );
-    
-    console.log('生成されたエントリ:');
-    console.log(entry);
-    
     // 実際のIssue更新をテスト（注意: 実際のIssueが更新されます）
     const confirmUpdate = process.argv.includes('--update');
     if (confirmUpdate) {
-      console.log('実際のIssue更新を実行中...');
+      console.log('\n実際のIssue更新を実行中...');
       const result = await manager.addMusicDataToIssue(sampleEmailData);
       console.log('Issue更新完了:', result.html_url);
+      console.log('追加されたエントリをGitHubで確認してください');
     } else {
-      console.log('実際の更新をスキップ（--update フラグを付けると実行されます）');
+      console.log('\n実際の更新をスキップ（--update フラグを付けると実行されます）');
+      console.log('コマンド例: npm run test:issue:update');
     }
     
   } catch (error) {
