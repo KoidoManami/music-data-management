@@ -1,12 +1,14 @@
 {
   "name": "music-data-management",
   "version": "1.0.0",
-  "description": "楽曲データの未処理情報を管理するシステム",
+  "description": "楽曲データの未処理情報を既存GitHub Issueに追記するシステム",
   "main": "src/gmail-github-integration.js",
   "scripts": {
     "start": "node src/index.js",
     "test": "npm run test:unit",
     "test:unit": "jest",
+    "test:issue": "node src/test-issue-update.js",
+    "test:issue:update": "node src/test-issue-update.js --update",
     "dev": "nodemon src/index.js"
   },
   "dependencies": {
@@ -24,7 +26,8 @@
     "data-management",
     "gmail",
     "github",
-    "automation"
+    "automation",
+    "issue-management"
   ],
   "author": "KoidoManami",
   "license": "MIT"
